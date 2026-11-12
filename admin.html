@@ -1,0 +1,204 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Print Online Mahasiswa</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+    .container { max-width: 1000px; margin: auto; }
+    .card { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+    input, button, select { padding: 11px; margin: 6px 0; box-sizing: border-box; }
+    input { width: 100%; }
+    button { cursor: pointer; background: #176b52; color: white; border: 0; border-radius: 6px; }
+    .order { border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin: 12px 0; overflow-wrap: anywhere; }
+    .hidden { display: none; }
+    #pesan { color: #b00020; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>PRINT ONLINE MAHASISWA</h2>
+  <h3>Halaman Admin</h3>
+
+  <div class="card" id="loginBox">
+    <h3>Login Admin</h3>
+    <input type="email" id="email" placeholder="Email admin">
+    <input type="password" id="password" placeholder="Password admin">
+    <button onclick="login()">Masuk</button>
+    <p id="pesan"></p>
+  </div>
+
+  <div class="card hidden" id="dashboard">
+    <button onclick="logout()">Keluar</button>
+    <h3>Daftar Pesanan Mahasiswa</h3>
+    <button onclick="muatPesanan()">Muat Ulang Pesanan</button>
+    <div id="daftarPesanan">Memuat pesanan...</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://lshrxjlhnthmsevslagm.supabase.co";
+const SUPABASE_KEY = "sb_publishable_oCZwuTRdIVkqmsNYIE6F_A_D0-G-nrzz";
+
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function login() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const pesan = document.getElementById("pesan");
+
+  pesan.textContent = "Memeriksa akun...";
+
+  const { data, error } = await db.auth.signInWithPassword({
+    email, password
+  });
+
+  if (error) {
+    pesan.textContent = "Login gagal: " + error.message;
+    return;
+  }
+
+  if (data.user.id !== "60805307-3927-4930-ae38-ca67eed3a5b1") {
+    await db.auth.signOut();
+    pesan.textContent = "Akun ini bukan admin.";
+    return;
+  }
+
+  document.getElementById("loginBox").classList.add("hidden");
+  document.getElementById("dashboard").classList.remove("hidden");
+  muatPesanan();
+}
+
+async function logout() {
+  await db.auth.signOut();
+  location.reload();
+}
+
+async function muatPesanan() {
+  const tempat = document.getElementById("daftarPesanan");
+  tempat.textContent = "Memuat pesanan...";
+
+  const { data, error } = await db
+    .from("pesanan")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    tempat.textContent = "Gagal memuat: " + error.message;
+    return;
+  }
+
+  tempat.innerHTML = "";
+
+  if (!data.length) {
+    tempat.textContent = "Belum ada pesanan.";
+    return;
+  }
+
+  data.forEach(p => {
+    const kartu = document.createElement("div");
+    kartu.className = "order";
+
+    const judul = document.createElement("h3");
+    judul.textContent = "Pesanan #" + p.id;
+
+    const nama = document.createElement("p");
+    nama.textContent = "Nama: " + p.nama;
+
+    const deskripsi = document.createElement("p");
+    deskripsi.textContent = "Deskripsi: " + p.deskripsi;
+
+    const file = document.createElement("p");
+    file.textContent = "File: " + p.nama_file;
+
+    const status = document.createElement("p");
+    status.textContent = "Status: " + p.status;
+
+    const pilihan = document.createElement("select");
+    ["menunggu", "sedang dicetak", "selesai", "sudah diambil"].forEach(s => {
+      const opsi = document.createElement("option");
+      opsi.value = s;
+      opsi.textContent = s;
+      pilihan.appendChild(opsi);
+    });
+    pilihan.value = p.status;
+
+    const tombolStatus = document.createElement("button");
+    tombolStatus.textContent = "Simpan Status";
+    tombolStatus.onclick = () => ubahStatus(p.id, pilihan.value);
+
+    const tombolUnduh = document.createElement("button");
+    tombolUnduh.textContent = "Unduh Dokumen";
+    tombolUnduh.onclick = () => unduhFile(p.lokasi_file);
+
+    const tombolHapus = document.createElement("button");
+    tombolHapus.textContent = "Hapus Pesanan";
+    tombolHapus.onclick = () => hapusPesanan(p.id, p.lokasi_file);
+
+    kartu.append(judul, nama, deskripsi, file, status,
+      pilihan, tombolStatus, tombolUnduh, tombolHapus);
+
+    tempat.appendChild(kartu);
+  });
+}
+
+async function ubahStatus(id, status) {
+  const { error } = await db.from("pesanan")
+    .update({ status }).eq("id", id);
+
+  if (error) {
+    alert("Gagal mengubah status: " + error.message);
+    return;
+  }
+
+  alert("Status berhasil diubah.");
+  muatPesanan();
+}
+
+async function unduhFile(lokasi) {
+  const { data, error } = await db.storage
+    .from("dokumen-mahasiswa")
+    .download(lokasi);
+
+  if (error) {
+    alert("Gagal mengunduh: " + error.message);
+    return;
+  }
+
+  const url = URL.createObjectURL(data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = lokasi.split("/").pop();
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function hapusPesanan(id, lokasi) {
+  if (!confirm("Yakin ingin menghapus pesanan ini?")) return;
+
+  const { error: fileError } = await db.storage
+    .from("dokumen-mahasiswa")
+    .remove([lokasi]);
+
+  if (fileError) {
+    alert("Gagal menghapus dokumen: " + fileError.message);
+    return;
+  }
+
+  const { error } = await db.from("pesanan")
+    .delete().eq("id", id);
+
+  if (error) {
+    alert("Dokumen terhapus, tetapi pesanan gagal dihapus: " + error.message);
+    return;
+  }
+
+  alert("Pesanan berhasil dihapus.");
+  muatPesanan();
+}
+</script>
+</body>
+</html>
