@@ -1,0 +1,148 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRINT ONLINE MAHASISWA</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f6fb;
+      margin: 0;
+      padding: 25px;
+      color: #243047;
+    }
+    .container {
+      max-width: 550px;
+      margin: 35px auto;
+      background: white;
+      padding: 28px;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px #0001;
+    }
+    h1 { color: #1769aa; text-align: center; }
+    p { text-align: center; color: #64748b; }
+    label { display: block; margin-top: 18px; font-weight: bold; }
+    input, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      margin-top: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+    textarea { min-height: 110px; }
+    button {
+      width: 100%;
+      margin-top: 22px;
+      padding: 14px;
+      background: #1769aa;
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .6; }
+    #hasil { margin-top: 18px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>PRINT ONLINE MAHASISWA</h1>
+    <p>Pesan cetak dokumen dengan mudah tanpa membawa flashdisk.</p>
+
+    <form id="formPesanan">
+      <label>Nama lengkap</label>
+      <input id="nama" type="text" required placeholder="Masukkan nama lengkap">
+
+      <label>Upload dokumen (PDF, DOC, DOCX)</label>
+      <input id="file" type="file"
+        accept=".pdf,.doc,.docx" required>
+
+      <label>Deskripsi cetak</label>
+      <textarea id="deskripsi" required
+        placeholder="Contoh: A4, halaman 1-10, 2 rangkap, hitam putih"></textarea>
+
+      <button id="tombol" type="submit">Kirim Pesanan</button>
+    </form>
+
+    <div id="hasil"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://lshrxjlhnthmsevslagm.supabase.co/rest/v1/";
+    const SUPABASE_KEY = "sb_publishable_oCZwuTRdIVkqmsNYIE6F_A_D0G-nrzz";
+
+    const db = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_KEY
+    );
+
+    document.getElementById("formPesanan").addEventListener("submit",
+      async function(e) {
+        e.preventDefault();
+
+        const nama = document.getElementById("nama").value.trim();
+        const deskripsi = document.getElementById("deskripsi").value.trim();
+        const file = document.getElementById("file").files[0];
+        const hasil = document.getElementById("hasil");
+        const tombol = document.getElementById("tombol");
+
+        if (!file || !nama || !deskripsi) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+          hasil.textContent = "Ukuran file maksimal 10 MB.";
+          return;
+        }
+
+        const ekstensi = file.name.split(".").pop().toLowerCase();
+        if (!["pdf", "doc", "docx"].includes(ekstensi)) {
+          hasil.textContent = "Format file harus PDF, DOC, atau DOCX.";
+          return;
+        }
+
+        tombol.disabled = true;
+        tombol.textContent = "Mengirim...";
+        hasil.textContent = "";
+
+        try {
+          const lokasi = crypto.randomUUID() + "." + ekstensi;
+
+          const { error: uploadError } = await db.storage
+            .from("dokumen-mahasiswa")
+            .upload(lokasi, file);
+
+          if (uploadError) throw uploadError;
+
+          const { error: insertError } = await db
+            .from("pesanan")
+            .insert({
+              nama: nama,
+              deskripsi: deskripsi,
+              nama_file: file.name,
+              lokasi_file: lokasi
+            });
+
+          if (insertError) {
+            await db.storage.from("dokumen-mahasiswa").remove([lokasi]);
+            throw insertError;
+          }
+
+          hasil.textContent = "Pesanan berhasil dikirim. Silakan tunggu konfirmasi admin.";
+          document.getElementById("formPesanan").reset();
+
+        } catch (error) {
+          hasil.textContent = "Pesanan gagal: " + error.message;
+        } finally {
+          tombol.disabled = false;
+          tombol.textContent = "Kirim Pesanan";
+        }
+      }
+    );
+  </script>
+</body>
+</html>
