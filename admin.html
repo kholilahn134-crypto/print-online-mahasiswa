@@ -31,6 +31,17 @@
     <p id="pesan"></p>
   </div>
 
+<div class="card hidden" id="resetBox">
+  <h3>Buat Password Baru</h3>
+  <input
+    type="password"
+    id="newPassword"
+    placeholder="Masukkan password baru"
+  >
+  <button onclick="updatePassword()">Simpan Password Baru</button>
+  <p id="resetMessage"></p>
+</div>
+
   <div class="card hidden" id="dashboard">
     <button onclick="logout()">Keluar</button>
     <h3>Daftar Pesanan Mahasiswa</h3>
@@ -44,7 +55,13 @@ const SUPABASE_URL = "https://lshrxjlhnthmsevslagm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_oCZwuTRdIVkqmsNYIE6F_A_D0G-nrzz";
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
+db.auth.onAuthStateChange((event, session) => {
+  if (event === "PASSWORD_RECOVERY" && session) {
+    document.getElementById("loginBox").classList.add("hidden");
+    document.getElementById("resetBox").classList.remove("hidden");
+    document.getElementById("dashboard").classList.add("hidden");
+  }
+});
 async function login() {
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
@@ -198,6 +215,27 @@ async function hapusPesanan(id, lokasi) {
 
   alert("Pesanan berhasil dihapus.");
   muatPesanan();
+}
+async function updatePassword() {
+  const password = document.getElementById("newPassword").value;
+  const pesan = document.getElementById("resetMessage");
+
+  if (password.length < 8) {
+    pesan.textContent = "Password minimal 8 karakter.";
+    return;
+  }
+
+  const { error } = await db.auth.updateUser({
+    password: password
+  });
+
+  if (error) {
+    pesan.textContent = "Gagal: " + error.message;
+    return;
+  }
+
+  pesan.textContent = "Password berhasil diperbarui!";
+  document.getElementById("resetBox").classList.add("hidden");
 }
 </script>
 </body>
